@@ -21,7 +21,7 @@ model Problem {
   description String
   difficulty  String
   createdAt   DateTime     @default(now())
-  testCases   TestCase[]
+  testcases   TestCase[]
   submissions Submission[]
 }
 
@@ -43,4 +43,12 @@ model TestCase {
   input          String
   expectedOutput String
   isHidden       Boolean @default(false)
+}
+model Contest {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  startTime   DateTime
+  endTime     DateTime
+  createdAt   DateTime @default(now())
 }

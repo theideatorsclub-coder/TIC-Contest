@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, status, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from prisma import Prisma
 from typing import Optional, List
 import httpx
@@ -133,10 +133,10 @@ async def get_problems(difficulty: Optional[str] = None, skip: int = 0, limit: i
 async def get_problem(problem_id: str):
     problem = await prisma.problem.find_unique(
         where={"id": problem_id},
-        include={"testcases": True}
+        include={"testcases": True}  # <-- Change this to match your schema! (e.g., "testCases" if camelCase)
     )
     if not problem:
-        raise HTTPException(status_code=404, detail="Problem not found")
+        raise HTTPException(status_status=404, detail="Problem not found")
     return problem
 
 # --- TEST CASE ROUTES ---
@@ -318,3 +318,131 @@ async def get_leaderboard(limit: int = 10):
     return {
         "leaderboard": leaderboard[:limit]
     }
+    from fastapi import WebSocket, WebSocketDisconnect
+import asyncio
+
+# --- WEBSOCKET CONNECTION MANAGER ---
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+manager = ConnectionManager()
+
+# --- REAL-TIME WEBSOCKET STREAMING ENDPOINT ---
+@app.websocket("/ws/submissions/{submission_id}")
+async def websocket_submission_stream(websocket: WebSocket, submission_id: str):
+    await manager.connect(websocket)
+    try:
+        # 1. Verify submission exists in DB
+        sub = await prisma.submission.find_unique(where={"id": submission_id})
+        if not sub:
+            await websocket.send_json({"error": "Submission not found"})
+            await websocket.close()
+            return
+
+        # 2. Send initial connection confirmation
+        await websocket.send_json({
+            "submission_id": submission_id,
+            "status": sub.status,
+            "message": "Connected to live execution stream 🚀"
+        })
+
+        # 3. Simulate live execution feedback loop (or poll DB status changes)
+        execution_steps = [
+            "Compiling source code...",
+            "Executing test case 1/3 (Public)...",
+            "Executing test case 2/3 (Public)...",
+            "Executing test case 3/3 (Hidden)..."
+        ]
+
+        for step in execution_steps:
+            await asyncio.sleep(1) # Simulate execution time per step
+            await websocket.send_json({
+                "status": "Running",
+                "current_step": step
+            })
+
+        # 4. Fetch final updated status from database
+        final_sub = await prisma.submission.find_unique(where={"id": submission_id})
+        final_status = final_sub.status if final_sub else "Accepted"
+
+        await websocket.send_json({
+            "status": final_status,
+            "message": "Execution complete!"
+        })
+
+        # Keep connection open briefly or listen for close
+        while True:
+            await websocket.receive_text()
+
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        print(f"🔌 Client disconnected from submission stream: {submission_id}")
+
+
+
+from datetime import datetime
+
+class ContestCreate(BaseModel):
+    title: str
+    description: str
+    start_time: str 
+    end_time: str
+
+class ContestProblemAdd(BaseModel):
+    problem_id: str
+
+
+@field_validator("start_time", "end_time", mode="before")
+def parse_datetime(cls, value):
+        if isinstance(value, str):
+            # Try parsing DD-MM-YYYY format first
+            try:
+                return datetime.strptime(value, "%d-%m-%Y")
+            except ValueError:
+                # Fallback to standard ISO format if they pass YYYY-MM-DD or full timestamp
+                return datetime.fromisoformat(value)
+        return value
+
+@app.post("/admin/contests", status_code=status.HTTP_201_CREATED)
+async def create_contest(contest: ContestCreate):
+    # In Prisma, ensure you have a Contest model defined in schema.prisma
+    new_contest = await prisma.contest.create(
+        data={
+            "title": contest.title,
+            "description": contest.description,
+            "startTime": contest.start_time,
+            "endTime": contest.end_time
+        }
+    )
+    return {"message": "Contest created successfully", "contest_id": new_contest.id}
+
+@app.get("/contests")
+async def get_contests():
+    contests = await prisma.contest.find_many(
+        order={"startTime": "desc"}
+    )
+    return {"count": len(contests), "contests": contests}
+
+@app.get("/contests/{contest_id}/leaderboard")
+async def get_contest_leaderboard(contest_id: str):
+    contest = await prisma.contest.find_unique(where={"id": contest_id})
+    if not contest:
+        raise HTTPException(status_code=404, detail="Contest not found")
+    
+    # Fetch contest participants or filtered submissions during contest window
+    # (Assuming submissions have a timestamp check against contest start/end)
+    return {
+        "contest_id": contest_id,
+        "title": contest.title,
+        "status": "Active" if contest.startTime <= datetime.utcnow() <= contest.endTime else "Ended",
+        "leaderboard": [] # Populated dynamically based on score & penalty time
+    }
+    
