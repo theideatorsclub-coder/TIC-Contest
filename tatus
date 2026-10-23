@@ -1,5 +1,0 @@
-[33m0c6f5d1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/test-case-api[m[33m, [m[1;31morigin/feature/test-case-api[m[33m, [m[1;31morigin/feature/backend-pipeline[m[33m, [m[1;32mfeature/backend-pipeline[m[33m)[m Complete backend core pipeline, pagination, and leaderboard
-[33ma447ab3[m[33m ([m[1;32mmain[m[33m)[m fix: added missing Optional import and finalized pagination API
-[33m6628c29[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m feat: added problem APIs, user history, leaderboard, and profile stats
-[33m7e4a57e[m feat: added Submission schema and /submit API endpoint
-[33m81fa443[m Initial commit
